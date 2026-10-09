@@ -33,19 +33,9 @@ const config: Config = {
     baseUrl: 'https://api.tempo.io/4',
     token: env.TEMPO_API_TOKEN,
   },
-  jiraApi: {
-    baseUrl: env.JIRA_BASE_URL,
-    token: env.JIRA_API_TOKEN,
-    email: env.JIRA_EMAIL,
-    authType: env.JIRA_AUTH_TYPE,
-    oauthClientId: env.JIRA_OAUTH_CLIENT_ID,
-    oauthClientSecret: env.JIRA_OAUTH_CLIENT_SECRET,
-    tempoAccountCustomFieldId:
-      env.JIRA_TEMPO_ACCOUNT_CUSTOM_FIELD_ID || undefined,
-  },
   server: {
     name: 'tempo-mcp-server',
-    version: '1.0.0',
+    version: '2.0.0',
   },
 };
 

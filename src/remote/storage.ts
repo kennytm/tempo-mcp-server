@@ -14,17 +14,7 @@
  */
 
 export interface UserCredentials {
-  // Tempo
   tempoApiToken: string;
-
-  // Jira
-  jiraBaseUrl: string;
-  jiraAuthType: 'basic' | 'bearer';
-  jiraApiToken: string;
-  /** Required for basic auth, ignored for bearer. */
-  jiraEmail?: string;
-  /** Optional Tempo account custom-field id (numeric, no `customfield_` prefix). */
-  jiraTempoAccountCustomFieldId?: string;
 }
 
 export interface StorageEnv {
@@ -111,7 +101,10 @@ export async function putCredentials(
   userId: string,
   creds: UserCredentials,
 ): Promise<void> {
-  const blob = await encrypt(JSON.stringify(creds), env.ENCRYPTION_KEY);
+  const blob = await encrypt(
+    JSON.stringify({ tempoApiToken: creds.tempoApiToken }),
+    env.ENCRYPTION_KEY,
+  );
   await env.USERS.put(`${USER_PREFIX}${userId}`, blob);
 }
 
@@ -123,7 +116,10 @@ export async function getCredentials(
   if (!blob) return null;
   try {
     const json = await decrypt(blob, env.ENCRYPTION_KEY);
-    return JSON.parse(json) as UserCredentials;
+    const creds = JSON.parse(json) as Partial<UserCredentials> | null;
+    if (typeof creds?.tempoApiToken !== 'string' || !creds.tempoApiToken.trim())
+      return null;
+    return { tempoApiToken: creds.tempoApiToken };
   } catch {
     return null;
   }

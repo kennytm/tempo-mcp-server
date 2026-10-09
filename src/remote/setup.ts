@@ -2,7 +2,7 @@
  * Onboarding pages: GET/POST /setup.
  *
  * Flow:
- *  1. GET /setup — server-rendered HTML form. Six fields (Tempo + Jira creds).
+ *  1. GET /setup — server-rendered HTML form for a Tempo token.
  *  2. POST /setup — validates, mints a `userId`, encrypts + stores creds in
  *     KV, and renders a success page with the MCP URL the user pastes into
  *     Claude/ChatGPT.
@@ -14,7 +14,7 @@
  *  - The success page renders the MCP URL as text + a copy button. We never
  *    redirect the browser to that URL (would put it in history).
  *  - We escape user-controlled values everywhere they appear in HTML to keep
- *    a future "show what I entered" path safe (currently we never echo back).
+ *    the token re-render on validation errors safe.
  */
 
 import {
@@ -84,24 +84,6 @@ const STYLE = `
   hr { border: 0; border-top: 1px solid var(--border); margin: 24px 0; }
 `;
 
-const SCRIPT_TOGGLE_AUTH = `
-  function syncAuthType() {
-    var t = (document.querySelector('input[name=jiraAuthType]:checked') || {}).value;
-    var emailRow = document.getElementById('email-row');
-    var emailInput = document.getElementById('jiraEmail');
-    if (!emailRow || !emailInput) return;
-    var basic = (t !== 'bearer');
-    emailRow.style.display = basic ? '' : 'none';
-    emailInput.required = basic;
-  }
-  document.addEventListener('DOMContentLoaded', function () {
-    syncAuthType();
-    document.querySelectorAll('input[name=jiraAuthType]').forEach(function (el) {
-      el.addEventListener('change', syncAuthType);
-    });
-  });
-`;
-
 const SCRIPT_COPY = `
   function copyUrl(id) {
     var el = document.getElementById(id);
@@ -137,8 +119,6 @@ export function renderSetupPage(
   const e = error ? `<div class="err">${escapeHtml(error)}</div>` : '';
   const v = (k: keyof UserCredentials) =>
     escapeHtml((prev?.[k] as string) ?? '');
-  // Bearer is currently disabled (see below); always default to basic on re-render.
-  const checkedBasic = 'checked';
   const body = `
     <h1>Tempo MCP — Setup</h1>
     <p>Generate your personal MCP connector URL. Each field is the same value
@@ -148,45 +128,9 @@ export function renderSetupPage(
     <form method="POST" action="/setup" class="card" autocomplete="off">
       <h2>Tempo</h2>
       <label for="tempoApiToken">Tempo API token <span class="req">*</span>
-        <span class="hint">Tempo → Settings → API Integration → New Token</span>
+        <span class="hint">Tempo → Settings → API Integration → New Token (Worklogs: View)</span>
       </label>
       <input id="tempoApiToken" name="tempoApiToken" type="password" required value="${v('tempoApiToken')}">
-
-      <h2>Jira</h2>
-      <label for="jiraBaseUrl">Jira base URL <span class="req">*</span>
-        <span class="hint">e.g. <code>https://your-org.atlassian.net</code></span>
-      </label>
-      <input id="jiraBaseUrl" name="jiraBaseUrl" type="url" required placeholder="https://your-org.atlassian.net" value="${v('jiraBaseUrl')}">
-
-      <label>Jira authentication type</label>
-      <div class="row" style="gap:24px">
-        <label style="font-weight:400;display:inline-flex;align-items:center;gap:6px;margin:6px 0;">
-          <input type="radio" name="jiraAuthType" value="basic" ${checkedBasic}> Basic (email + token)
-        </label>
-        <label style="font-weight:400;display:inline-flex;align-items:center;gap:6px;margin:6px 0;color:var(--muted);" title="Atlassian scoped/OAuth access tokens require routing through api.atlassian.com/ex/jira/{cloudId}, which the remote server does not yet do — coming soon.">
-          <input type="radio" name="jiraAuthType" value="bearer" disabled> Bearer (OAuth access token) <span class="hint">— coming soon</span>
-        </label>
-      </div>
-
-      <label for="jiraApiToken">Jira API token <span class="req">*</span>
-        <span class="hint">Use a classic token from <code>id.atlassian.com</code>. (Scoped tokens are not supported yet.)</span>
-      </label>
-      <input id="jiraApiToken" name="jiraApiToken" type="password" required value="${v('jiraApiToken')}">
-
-      <div id="email-row">
-        <label for="jiraEmail">Jira email <span class="req">*</span>
-          <span class="hint">Required for Basic auth.</span>
-        </label>
-        <input id="jiraEmail" name="jiraEmail" type="email" placeholder="you@company.com" value="${v('jiraEmail')}">
-      </div>
-
-      <details>
-        <summary>Optional</summary>
-        <label for="jiraTempoAccountCustomFieldId">Tempo account custom field ID
-          <span class="hint">Only if your org uses Tempo's <em>Account</em> work attribute (numeric, e.g. <code>10234</code>)</span>
-        </label>
-        <input id="jiraTempoAccountCustomFieldId" name="jiraTempoAccountCustomFieldId" type="text" value="${v('jiraTempoAccountCustomFieldId')}">
-      </details>
 
       <button type="submit">Generate MCP URL</button>
     </form>
@@ -196,12 +140,12 @@ export function renderSetupPage(
       <ul>
         <li>Server creates a unique URL like <code>/mcp/u_…</code>.</li>
         <li>You paste that URL into Claude.ai → Settings → Connectors → Add custom connector.</li>
-        <li>Claude calls your URL with each tool invocation; the Worker decrypts your creds and proxies to Tempo + Jira.</li>
+        <li>Claude calls your URL with each tool invocation; the Worker decrypts your creds and retrieves worklogs visible to your Tempo token.</li>
         <li>Once added in Claude.ai web, the connector syncs to mobile (iOS/Android).</li>
       </ul>
     </div>
   `;
-  return layout('Tempo MCP — Setup', body, SCRIPT_TOGGLE_AUTH);
+  return layout('Tempo MCP — Setup', body);
 }
 
 export function renderSetupSuccess(mcpUrl: string): string {
@@ -216,8 +160,8 @@ export function renderSetupSuccess(mcpUrl: string): string {
       <hr>
 
       <div class="warn">
-        <strong>This URL is your credential.</strong> Anyone who has it can read and write
-        your Tempo worklogs. Treat it like a password: don't share, don't commit to git,
+        <strong>This URL is your credential.</strong> Anyone who has it can retrieve
+        worklogs visible to your Tempo token. Treat it like a password: don't share, don't commit to git,
         don't paste into chats.
       </div>
 
@@ -233,7 +177,6 @@ export function renderSetupSuccess(mcpUrl: string): string {
       <ul>
         <li>Settings → Apps → Advanced → enable <strong>Developer mode</strong> (Pro/Plus/Business+).</li>
         <li>New custom MCP server → paste the URL above.</li>
-        <li>Plus/Pro accounts can read; write tools require Business+.</li>
       </ul>
     </div>
     <p style="margin-top:24px;text-align:center"><a href="/setup">← Generate another</a></p>
@@ -258,54 +201,11 @@ async function parseFormData(request: Request): Promise<ParsedSetup> {
   };
   const partial: Partial<UserCredentials> = {
     tempoApiToken: get('tempoApiToken'),
-    jiraBaseUrl: get('jiraBaseUrl'),
-    jiraApiToken: get('jiraApiToken'),
-    jiraEmail: get('jiraEmail') || undefined,
-    // Force basic. Bearer is wired through the type system and the storage
-    // layer for the day we add gateway-URL routing (see jira.ts), but until
-    // that's done a bearer config would 401 against the user's site URL.
-    // Ignore whatever the form sent.
-    jiraAuthType: 'basic',
-    jiraTempoAccountCustomFieldId:
-      get('jiraTempoAccountCustomFieldId') || undefined,
   };
 
   if (!partial.tempoApiToken)
     return { ok: false, error: 'Tempo API token is required.', partial };
-  if (!partial.jiraBaseUrl)
-    return { ok: false, error: 'Jira base URL is required.', partial };
-  try {
-    const u = new URL(partial.jiraBaseUrl);
-    if (u.protocol !== 'https:') {
-      return {
-        ok: false,
-        error: 'Jira base URL must be an https URL.',
-        partial,
-      };
-    }
-  } catch {
-    return { ok: false, error: 'Jira base URL is not a valid URL.', partial };
-  }
-  if (!partial.jiraApiToken)
-    return { ok: false, error: 'Jira API token is required.', partial };
-  if (partial.jiraAuthType === 'basic' && !partial.jiraEmail) {
-    return {
-      ok: false,
-      error: 'Jira email is required for Basic auth.',
-      partial,
-    };
-  }
-  if (
-    partial.jiraTempoAccountCustomFieldId &&
-    !/^\d+$/.test(partial.jiraTempoAccountCustomFieldId)
-  ) {
-    return {
-      ok: false,
-      error: 'Tempo account custom field ID must be numeric.',
-      partial,
-    };
-  }
-  return { ok: true, creds: partial as UserCredentials };
+  return { ok: true, creds: { tempoApiToken: partial.tempoApiToken } };
 }
 
 export async function handleSetup(
@@ -343,21 +243,21 @@ export async function handleSetup(
 export function renderLanding(): string {
   const body = `
     <h1>Tempo MCP Server</h1>
-    <p>Remote MCP server for managing Tempo worklogs in Jira. Use it from
+    <p>Remote MCP server for retrieving Tempo worklogs. Use it from
     Claude.ai (web + mobile) and ChatGPT (Developer Mode) without any local install.</p>
     <div class="card">
       <h2>Get started</h2>
       <p>Click below to generate your personal MCP URL. You'll need a Tempo API token
-      and a classic Jira API token + email.</p>
+      with permission to view worklogs.</p>
       <a href="/setup"><button type="button">Generate MCP URL</button></a>
     </div>
     <div class="card">
       <h2>How it works</h2>
       <ul>
-        <li>You enter your Tempo + Jira credentials once on the next page.</li>
+        <li>You enter your Tempo API token once on the next page.</li>
         <li>The server stores them encrypted (AES-GCM) and gives you a unique URL.</li>
         <li>You paste that URL into Claude/ChatGPT as a custom connector.</li>
-        <li>The MCP tools (createWorklog, getWorklogAnalytics, etc.) work in any chat.</li>
+        <li>The retrieveWorklogs tool returns raw issue IDs for a separate Jira MCP to resolve.</li>
       </ul>
     </div>
   `;

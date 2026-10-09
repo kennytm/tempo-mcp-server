@@ -1,7 +1,7 @@
 {
   "name": "@ivelin-web/tempo-mcp-server",
-  "version": "1.8.0",
-  "description": "MCP server for managing Tempo worklogs in Jira",
+  "version": "2.0.0",
+  "description": "MCP server for retrieving Tempo worklogs",
   "main": "build/index.js",
   "type": "module",
   "bin": {
@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.node.json && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "start": "node build/index.js",
+    "test": "tsx --test server.test.mjs",
     "dev": "tsx watch src/index.ts",
     "inspect": "npx @modelcontextprotocol/inspector tsx src/index.ts",
     "prepare": "npm run build && husky",

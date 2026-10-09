@@ -3,7 +3,7 @@
  *
  * Routes:
  *   GET  /                        Landing page with link to /setup.
- *   GET  /setup                   Onboarding form (paste Tempo + Jira creds).
+ *   GET  /setup                   Onboarding form (paste a Tempo token).
  *   POST /setup                   Stores creds in KV; returns success page
  *                                 with the user's MCP URL.
  *   POST /mcp/u_<id>              Streamable HTTP MCP endpoint, scoped to

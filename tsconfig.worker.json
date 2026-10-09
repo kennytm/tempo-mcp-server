@@ -20,9 +20,8 @@
   "include": [
     "src/remote/**/*",
     "src/types.ts",
-    "src/jira.ts",
     "src/tools.ts",
     "src/utils.ts"
   ],
-  "exclude": ["node_modules", "src/index.ts", "src/oauth.ts", "src/config.ts"]
+  "exclude": ["node_modules", "src/index.ts", "src/config.ts"]
 }

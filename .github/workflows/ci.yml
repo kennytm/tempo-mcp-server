@@ -23,3 +23,7 @@ jobs:
         run: npm run format:check
       - name: Build
         run: npm run build
+      - name: Type-check Worker
+        run: npm run remote:typecheck
+      - name: Test
+        run: npm test
